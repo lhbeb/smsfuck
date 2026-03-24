@@ -16,8 +16,22 @@ export async function POST(request: NextRequest) {
       return new Response("Missing required fields", { status: 400 });
     }
 
-    // Optional: Validate Twilio Signature
-    const twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
+    // Optional: Validate Twilio Signature dynamically per number
+    let twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
+
+    if (toNumber) {
+      const formattedTo = toNumber.startsWith("+") ? toNumber : `+1${toNumber.replace(/\D/g, "")}`;
+      const { data: account } = await supabaseServerClient
+        .from("twilio_accounts")
+        .select("auth_token")
+        .eq("phone_number", formattedTo)
+        .single();
+        
+      if (account?.auth_token) {
+        twilioAuthToken = account.auth_token;
+      }
+    }
+
     if (twilioAuthToken) {
       const signature = request.headers.get("x-twilio-signature");
       const url = request.url; // Note: In production, ensure this exactly matches your configured webhook URL

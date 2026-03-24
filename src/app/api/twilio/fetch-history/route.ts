@@ -6,52 +6,70 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    const accountSid = process.env.TWILIO_ACCOUNT_SID;
-    const authToken = process.env.TWILIO_AUTH_TOKEN;
+    // 1. Fetch all securely stored accounts from the Vault
+    const { data: accounts, error: accountsErr } = await supabaseServerClient
+      .from("twilio_accounts")
+      .select("*");
 
-    if (!accountSid || !authToken) {
+    if (accountsErr) throw accountsErr;
+
+    if (!accounts || accounts.length === 0) {
       return NextResponse.json(
-        { error: "Missing TWILIO_ACCOUNT_SID or TWILIO_AUTH_TOKEN in .env.local" },
-        { status: 500 }
+        { message: "No Twilio accounts registered in the vault. Please add one via the UI Settings." },
+        { status: 404 }
       );
     }
 
-    // Initialize Twilio client
-    const client = twilio(accountSid, authToken);
+    let totalImported = 0;
+    const syncErrors: string[] = [];
 
-    // Fetch the last 100 incoming messages to the specific number
-    const messages = await client.messages.list({
-      to: "+13186574299",
-      limit: 100,
-    });
+    // 2. Iterate through every registered virtual endpoint
+    for (const acc of accounts) {
+      try {
+        const client = twilio(acc.account_sid, acc.auth_token);
 
-    if (messages.length === 0) {
-      return NextResponse.json({ message: "No historical messages found for +13186574299." });
-    }
+        // Normalize inline just in case older DB records have spaces
+        const cleanPhone = `+${acc.phone_number.replace(/\D/g, "")}`;
 
-    // Map Twilio message objects to our Supabase schema
-    const mappedMessages = messages.map((m) => ({
-      from_number: m.from,
-      to_number: m.to,
-      body: m.body,
-      message_sid: m.sid,
-      created_at: m.dateCreated.toISOString(),
-    }));
+        // Fetch the last 100 incoming messages to this specific number
+        const messages = await client.messages.list({
+          to: cleanPhone,
+          limit: 100,
+        });
 
-    // Upsert into Supabase (ignoring duplicates using the unique message_sid column)
-    const { data, error } = await supabaseServerClient
-      .from("messages")
-      .upsert(mappedMessages, { onConflict: "message_sid" });
+        if (messages.length === 0) continue;
 
-    if (error) {
-      console.error("Supabase bulk insert error:", error);
-      return NextResponse.json({ error: "Failed to insert into Supabase" }, { status: 500 });
+        // Map Twilio message objects to our Supabase schema
+        const mappedMessages = messages.map((m) => ({
+          from_number: m.from,
+          to_number: m.to,
+          body: m.body,
+          message_sid: m.sid,
+          created_at: m.dateCreated.toISOString(),
+        }));
+
+        // Upsert into Supabase
+        const { error } = await supabaseServerClient
+          .from("messages")
+          .upsert(mappedMessages, { onConflict: "message_sid" });
+
+        if (error) {
+          console.error(`Supabase bulk insert error for ${acc.phone_number}:`, error);
+        } else {
+          totalImported += mappedMessages.length;
+        }
+
+      } catch (clientErr: any) {
+        console.error(`Failed to sync history for ${acc.phone_number}:`, clientErr);
+        syncErrors.push(`[${acc.phone_number}]: ${clientErr.message}`);
+      }
     }
 
     return NextResponse.json({
       success: true,
-      importedCount: mappedMessages.length,
-      message: "Successfully grabbed past messages and injected them into the database!"
+      importedCount: totalImported,
+      errors: syncErrors.length > 0 ? syncErrors : undefined,
+      message: "Successfully synchronized past messages for all endpoints in the Security Vault!"
     });
 
   } catch (error: any) {

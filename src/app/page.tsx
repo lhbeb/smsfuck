@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { MessageSquare, Phone, Clock, Search, Loader2, Inbox, ShieldCheck, UserPlus, Check, X, Bot, Hash, SignalHigh, Plus, Copy } from "lucide-react";
+import { MessageSquare, Phone, Clock, Search, Loader2, Inbox, ShieldCheck, UserPlus, Check, X, Bot, Hash, SignalHigh, Plus, Copy, Settings, Trash2, ArchiveRestore } from "lucide-react";
 import { supabaseBrowserClient } from "@/lib/supabase";
 import { Message } from "@/types";
 import { identifySender, getCountryFlag } from "@/lib/identify";
@@ -24,6 +24,15 @@ export default function DashboardPage() {
   const [newTwilioNumber, setNewTwilioNumber] = useState("");
   const [addingNumber, setAddingNumber] = useState(false);
   const [copiedNumber, setCopiedNumber] = useState<string | null>(null);
+
+  const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingPhone, setSettingPhone] = useState("");
+  const [settingSid, setSettingSid] = useState("");
+  const [settingToken, setSettingToken] = useState("");
+  const [savingSettings, setSavingSettings] = useState(false);
+
+  const [viewingDeleted, setViewingDeleted] = useState(false);
+  const [loadingAction, setLoadingAction] = useState<string | null>(null);
 
   useEffect(() => {
     const saved = localStorage.getItem("sms_contacts");
@@ -62,6 +71,50 @@ export default function DashboardPage() {
       alert("Failed to register endpoint.");
     } finally {
       setAddingNumber(false);
+    }
+  };
+
+  const handleSaveSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSavingSettings(true);
+    try {
+      const res = await fetch("/api/twilio/accounts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          phone_number: settingPhone,
+          account_sid: settingSid,
+          auth_token: settingToken
+        })
+      });
+      if (!res.ok) throw new Error("Failed to save credentials");
+      setShowSettingsModal(false);
+      setSettingPhone("");
+      setSettingSid("");
+      setSettingToken("");
+    } catch (err) {
+      console.error(err);
+      alert("Failed to save credentials.");
+    } finally {
+      setSavingSettings(false);
+    }
+  };
+
+  const handleDeleteMessage = async (message_sid: string, restore = false) => {
+    setLoadingAction(message_sid);
+    try {
+      const res = await fetch("/api/messages/delete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message_sid, restore })
+      });
+      if (!res.ok) throw new Error("Failed to modify message");
+      // Supabase realtime instantly updates the UI from the listener
+    } catch (err) {
+      console.error(err);
+      alert("Failed to modify message.");
+    } finally {
+      setLoadingAction(null);
     }
   };
 
@@ -132,11 +185,16 @@ export default function DashboardPage() {
   const normalizePhone = (phone: string) => phone.replace(/[^0-9+]/g, '');
 
   const receiverNumbers = useMemo(() => {
-    return Array.from(new Set(messages.map((m) => normalizePhone(m.to_number))));
+    return Array.from(new Set(messages.filter((m) => !m.is_deleted).map((m) => normalizePhone(m.to_number))));
   }, [messages]);
 
   const filteredMessages = messages.filter((msg) => {
-      if (selectedInbox && normalizePhone(msg.to_number) !== selectedInbox) return false;
+      // Isolate Trash
+      if (viewingDeleted && !msg.is_deleted) return false;
+      if (!viewingDeleted && msg.is_deleted) return false;
+
+      if (selectedInbox && !viewingDeleted && normalizePhone(msg.to_number) !== selectedInbox) return false;
+      
       const identity = identifySender(msg.from_number, msg.body);
       const customName = contacts[msg.from_number] || "";
       const search = searchQuery.toLowerCase();
@@ -148,8 +206,8 @@ export default function DashboardPage() {
   });
 
   const getMessageCount = (phone: string | null) => {
-    if (!phone) return messages.length;
-    return messages.filter(m => normalizePhone(m.to_number) === phone).length;
+    if (!phone) return messages.filter(m => !m.is_deleted).length;
+    return messages.filter(m => !m.is_deleted && normalizePhone(m.to_number) === phone).length;
   };
 
   return (
@@ -171,11 +229,20 @@ export default function DashboardPage() {
             />
           </div>
           
-          <div className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-900/80 border border-zinc-700/80 text-sm font-medium backdrop-blur-md shadow-[0_0_30px_rgba(16,185,129,0.15)]">
-            <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-[pulse_2s_ease-in-out_infinite] shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
-            <span className="text-zinc-200 tracking-wide uppercase text-xs">Environment Active</span>
-            <div className="w-[1px] h-4 bg-zinc-700 mx-1" />
-            <SignalHigh className="w-4 h-4 text-emerald-400" />
+          <div className="flex items-center gap-4">
+            <button 
+              onClick={() => setShowSettingsModal(true)} 
+              className="p-2.5 bg-zinc-900 border border-zinc-700/80 rounded-full hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-white shadow-[0_0_15px_rgba(255,255,255,0.02)]"
+              title="Vault Settings"
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+            <div className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-900/80 border border-zinc-700/80 text-sm font-medium backdrop-blur-md shadow-[0_0_30px_rgba(16,185,129,0.15)]">
+              <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-[pulse_2s_ease-in-out_infinite] shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
+              <span className="text-zinc-200 tracking-wide uppercase text-xs">Environment Active</span>
+              <div className="w-[1px] h-4 bg-zinc-700 mx-1" />
+              <SignalHigh className="w-4 h-4 text-emerald-400" />
+            </div>
           </div>
         </header>
 
@@ -190,20 +257,39 @@ export default function DashboardPage() {
             
             <div className="space-y-2">
               <button 
-                onClick={() => setSelectedInbox(null)} 
+                onClick={() => { setSelectedInbox(null); setViewingDeleted(false); }} 
                 className={cn(
                   "w-full flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-300 outline-none",
-                  selectedInbox === null 
+                  selectedInbox === null && !viewingDeleted
                     ? "bg-indigo-600/30 text-indigo-400 border border-indigo-500/40 shadow-[inset_0_0_15px_rgba(99,102,241,0.15)]" 
                     : "hover:bg-zinc-800/60 border border-transparent text-zinc-400 hover:text-zinc-200"
                 )}
               >
                 <div className="flex items-center gap-3">
-                  <Inbox className={cn("w-5 h-5", selectedInbox === null ? "text-indigo-400" : "text-zinc-500")} />
+                  <Inbox className={cn("w-5 h-5", selectedInbox === null && !viewingDeleted ? "text-indigo-400" : "text-zinc-500")} />
                   <span className="font-semibold tracking-wide">Global Feed</span>
                 </div>
                 <span className="bg-zinc-950/80 border border-zinc-800/50 text-zinc-400 text-xs font-bold px-2 py-0.5 rounded-full shadow-inner">
-                  {getMessageCount(null)}
+                  {messages.filter(m => !m.is_deleted).length}
+                </span>
+              </button>
+
+              {/* Trash Folder */}
+              <button 
+                onClick={() => { setSelectedInbox(null); setViewingDeleted(true); }} 
+                className={cn(
+                  "w-full flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-300 outline-none mt-2",
+                  viewingDeleted 
+                    ? "bg-red-600/10 text-red-500 border border-red-500/30 shadow-[inset_0_0_15px_rgba(239,68,68,0.1)]" 
+                    : "hover:bg-zinc-800/60 border border-transparent text-zinc-500 hover:text-zinc-300"
+                )}
+              >
+                <div className="flex items-center gap-3">
+                  <Trash2 className={cn("w-5 h-5", viewingDeleted ? "text-red-500" : "opacity-60")} />
+                  <span className="font-semibold tracking-wide text-sm border-0">Trash</span>
+                </div>
+                <span className="bg-zinc-950/80 border border-zinc-800/50 text-zinc-400 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-inner">
+                  {messages.filter(m => m.is_deleted).length}
                 </span>
               </button>
 
@@ -264,12 +350,14 @@ export default function DashboardPage() {
             <header className="flex flex-col md:flex-row items-center justify-between gap-6 pb-8 border-b border-zinc-800/60 relative z-10 w-full shrink-0">
               <div className="flex flex-col justify-center items-start w-full md:w-auto">
                 <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-                  {selectedInbox ? <div className="flex items-center gap-2"><span className="text-3xl">{getCountryFlag(selectedInbox)}</span><span>{selectedInbox}</span></div> : "System Feed"}
+                  {viewingDeleted ? "Trash" : selectedInbox ? <div className="flex items-center gap-2"><span className="text-3xl">{getCountryFlag(selectedInbox)}</span><span>{selectedInbox}</span></div> : "System Feed"}
                 </h1>
                 <p className="text-sm text-zinc-500 mt-2 font-medium tracking-wide">
-                  {selectedInbox 
-                    ? "Viewing isolated SMS traffic for this endpoint." 
-                    : "Monitoring multi-node real-time traffic."}
+                  {viewingDeleted
+                    ? "Messages that have been soft deleted."
+                    : selectedInbox 
+                      ? "Viewing isolated SMS traffic for this endpoint." 
+                      : "Monitoring multi-node real-time traffic."}
                 </p>
               </div>
 
@@ -406,6 +494,17 @@ export default function DashboardPage() {
                                 <Clock className="w-3.5 h-3.5 text-zinc-600" />
                                 {format(new Date(msg.created_at), "h:mm a · MMM do")}
                               </div>
+
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); handleDeleteMessage(msg.message_sid, msg.is_deleted); }}
+                                disabled={loadingAction === msg.message_sid}
+                                className="ml-auto p-1.5 hover:bg-zinc-800 text-zinc-500 hover:text-red-400 rounded-md transition-colors disabled:opacity-50 flex items-center gap-1 border border-zinc-800/50"
+                                title={msg.is_deleted ? "Restore Message" : "Move to Trash"}
+                              >
+                                {loadingAction === msg.message_sid ? <Loader2 className="w-3.5 h-3.5 animate-spin text-zinc-400" /> : 
+                                 msg.is_deleted ? <><ArchiveRestore className="w-3 h-3 text-emerald-500/80" /> <span className="text-[10px] text-zinc-400 pr-1 tracking-wider uppercase">Restore</span></> 
+                                                : <><Trash2 className="w-3 h-3" /> <span className="text-[10px] text-zinc-400 pr-1 tracking-wider uppercase">Trash</span></>}
+                              </button>
                             </div>
                           </div>
                           
@@ -460,6 +559,71 @@ export default function DashboardPage() {
                 className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:shadow-[0_0_30px_rgba(79,70,229,0.5)]"
               >
                 {addingNumber ? <Loader2 className="w-5 h-5 animate-spin" /> : "Deploy Listener"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Settings Modal */}
+      {showSettingsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 p-8 rounded-3xl w-full max-w-md shadow-2xl scale-100">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-white tracking-tight flex items-center gap-2">
+                <ShieldCheck className="w-5 h-5 text-indigo-400" />
+                Security Vault
+              </h3>
+              <button onClick={() => setShowSettingsModal(false)} className="text-zinc-500 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <p className="text-sm text-zinc-400 mb-8 leading-relaxed">
+              Securely bind Twilio API credentials to a specific phone number. This isolates and encrypts traffic dynamically.
+            </p>
+            
+            <form onSubmit={handleSaveSettings} className="space-y-4">
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5 ml-1">Virtual Number</label>
+                <input 
+                  type="tel" 
+                  placeholder="+1 (555) 000-0000"
+                  value={settingPhone}
+                  onChange={(e) => setSettingPhone(e.target.value)}
+                  className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 font-mono text-sm shadow-inner transition-all"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5 ml-1">Account SID</label>
+                <input 
+                  type="text" 
+                  placeholder="AC..."
+                  value={settingSid}
+                  onChange={(e) => setSettingSid(e.target.value)}
+                  className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 font-mono text-sm shadow-inner transition-all"
+                  required
+                />
+              </div>
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-zinc-500 mb-1.5 ml-1">Auth Token</label>
+                <input 
+                  type="password" 
+                  placeholder="••••••••••••••••••••••••"
+                  value={settingToken}
+                  onChange={(e) => setSettingToken(e.target.value)}
+                  className="w-full bg-black border border-zinc-800 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-indigo-500 font-mono text-sm shadow-inner transition-all"
+                  required
+                />
+              </div>
+              
+              <button 
+                disabled={savingSettings || !settingPhone || !settingSid || !settingToken}
+                type="submit"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 mt-4 rounded-xl transition-colors flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(79,70,229,0.3)]"
+              >
+                {savingSettings ? <Loader2 className="w-5 h-5 animate-spin" /> : "Lock Credentials"}
               </button>
             </form>
           </div>

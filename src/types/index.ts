@@ -5,4 +5,5 @@ export interface Message {
   body: string;
   message_sid: string;
   created_at: string;
+  is_deleted?: boolean;
 }
