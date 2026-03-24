@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { MessageSquare, Phone, Clock, Search, Loader2, Inbox, ShieldCheck, UserPlus, Check, X, Bot, Hash, SignalHigh } from "lucide-react";
+import { MessageSquare, Phone, Clock, Search, Loader2, Inbox, ShieldCheck, UserPlus, Check, X, Bot, Hash, SignalHigh, Plus, Copy } from "lucide-react";
 import { supabaseBrowserClient } from "@/lib/supabase";
 import { Message } from "@/types";
 import { identifySender } from "@/lib/identify";
@@ -20,6 +20,11 @@ export default function DashboardPage() {
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [newContactName, setNewContactName] = useState("");
 
+  const [showAddModal, setShowAddModal] = useState(false);
+  const [newTwilioNumber, setNewTwilioNumber] = useState("");
+  const [addingNumber, setAddingNumber] = useState(false);
+  const [copiedNumber, setCopiedNumber] = useState<string | null>(null);
+
   useEffect(() => {
     const saved = localStorage.getItem("sms_contacts");
     if (saved) setContacts(JSON.parse(saved));
@@ -35,6 +40,36 @@ export default function DashboardPage() {
     localStorage.setItem("sms_contacts", JSON.stringify(updated));
     setEditingContactId(null);
     setNewContactName("");
+  };
+
+  const handleAddNumber = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTwilioNumber.trim()) return;
+    setAddingNumber(true);
+    try {
+      const formatted = newTwilioNumber.startsWith("+") ? newTwilioNumber : `+1${newTwilioNumber.replace(/\D/g, "")}`;
+      const res = await fetch("/api/twilio/add-listener", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone_number: formatted })
+      });
+      if (!res.ok) throw new Error("Failed");
+      setNewTwilioNumber("");
+      setShowAddModal(false);
+      setSelectedInbox(formatted);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to register endpoint.");
+    } finally {
+      setAddingNumber(false);
+    }
+  };
+
+  const handleCopy = (e: React.MouseEvent, num: string) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(num);
+    setCopiedNumber(num);
+    setTimeout(() => setCopiedNumber(null), 2000);
   };
 
   const playNotificationSound = () => {
@@ -176,21 +211,39 @@ export default function DashboardPage() {
                   key={num} 
                   onClick={() => setSelectedInbox(num)} 
                   className={cn(
-                    "w-full flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-300 outline-none",
+                    "group w-full flex items-center justify-between px-4 py-3.5 rounded-2xl transition-all duration-300 outline-none",
                     selectedInbox === num 
                       ? "bg-indigo-600/30 text-indigo-400 border border-indigo-500/40 shadow-[inset_0_0_15px_rgba(99,102,241,0.15)]" 
                       : "hover:bg-zinc-800/60 border border-transparent text-zinc-400 hover:text-zinc-200"
                   )}
                 >
-                  <div className="flex items-center gap-3">
-                    <Hash className={cn("w-4 h-4", selectedInbox === num ? "text-indigo-400/80" : "opacity-40")} />
+                  <div className="flex items-center gap-2.5">
+                    <Hash className={cn("w-4 h-4 flex-shrink-0", selectedInbox === num ? "text-indigo-400/80" : "opacity-40")} />
                     <span className="font-medium tracking-wide font-mono text-sm">{num}</span>
+                    <div 
+                      onClick={(e) => handleCopy(e, num)}
+                      className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded-md transition-all ml-1"
+                      title="Copy to clipboard"
+                    >
+                      {copiedNumber === num ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                    </div>
                   </div>
-                  <span className="bg-zinc-950/80 border border-zinc-800/50 text-zinc-400 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-inner">
+                  <span className="bg-zinc-950/80 border border-zinc-800/50 text-zinc-400 text-[10px] font-bold px-2 py-0.5 rounded-full shadow-inner flex-shrink-0">
                     {getMessageCount(num)}
                   </span>
                 </button>
               ))}
+
+              {/* Add Number Button */}
+              <div className="pt-4">
+                <button 
+                  onClick={() => setShowAddModal(true)}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-dashed border-zinc-700/50 hover:border-indigo-500/50 hover:bg-indigo-500/10 text-zinc-500 hover:text-indigo-400 transition-all font-medium text-sm outline-none"
+                >
+                  <Plus className="w-4 h-4" />
+                  <span>Add Virtual Number</span>
+                </button>
+              </div>
             </div>
           </div>
 
@@ -361,6 +414,45 @@ export default function DashboardPage() {
 
         </div>
       </div>
+
+      {/* Add Number Modal */}
+      {showAddModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-zinc-950 border border-zinc-800 p-8 rounded-3xl w-full max-w-sm shadow-2xl scale-100">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-xl font-bold text-white tracking-tight">Add Virtual Endpoint</h3>
+              <button onClick={() => setShowAddModal(false)} className="text-zinc-500 hover:text-white transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            
+            <p className="text-sm text-zinc-400 mb-8 leading-relaxed">
+              Enter a Twilio phone number your application is receiving messages on. We will open an active listener for it.
+            </p>
+            
+            <form onSubmit={handleAddNumber} className="space-y-6">
+              <div>
+                <input 
+                  autoFocus
+                  type="tel" 
+                  placeholder="+1 (555) 000-0000"
+                  value={newTwilioNumber}
+                  onChange={(e) => setNewTwilioNumber(e.target.value)}
+                  className="w-full bg-black border border-zinc-800 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 font-mono text-sm shadow-inner transition-all"
+                />
+              </div>
+              
+              <button 
+                disabled={addingNumber || !newTwilioNumber.trim()}
+                type="submit"
+                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:shadow-[0_0_30px_rgba(79,70,229,0.5)]"
+              >
+                {addingNumber ? <Loader2 className="w-5 h-5 animate-spin" /> : "Deploy Listener"}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
