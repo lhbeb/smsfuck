@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { MessageSquare, Phone, Clock, Search, Loader2, Inbox, ShieldCheck, UserPlus, Check, X, Bot, Hash, SignalHigh, Plus, Copy, Settings, Trash2, ArchiveRestore } from "lucide-react";
+import { MessageSquare, Phone, Clock, Search, Loader2, Inbox, ShieldCheck, UserPlus, Check, X, Bot, Hash, SignalHigh, Plus, Copy, Settings, Trash2, ArchiveRestore, RefreshCw } from "lucide-react";
 import { supabaseBrowserClient } from "@/lib/supabase";
 import { Message } from "@/types";
 import { identifySender, getCountryFlag } from "@/lib/identify";
@@ -33,6 +33,7 @@ export default function DashboardPage() {
 
   const [viewingDeleted, setViewingDeleted] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem("sms_contacts");
@@ -150,6 +151,29 @@ export default function DashboardPage() {
     }
   };
 
+  const handleForceSync = useCallback(async (manual = true) => {
+    if (manual) setSyncing(true);
+    try {
+      // 1. Force backend to rigorously ingest directly from Twilio
+      await fetch("/api/twilio/fetch-history");
+      
+      // 2. Real-time update the client store without refreshing the page
+      const res = await fetch("/api/messages", { cache: "no-store" });
+      const data = await res.json();
+      if (!data.error) setMessages(data);
+    } catch (e) {
+      console.error("Sync engine collision", e);
+    } finally {
+      if (manual) setSyncing(false);
+    }
+  }, []);
+
+  // Ultimate Auto-Healer: Silently polls Twilio every 30 seconds to guarantee ZERO missed messages.
+  useEffect(() => {
+    const interval = setInterval(() => handleForceSync(false), 30000);
+    return () => clearInterval(interval);
+  }, [handleForceSync]);
+
   useEffect(() => {
     const fetchMessages = async () => {
       try {
@@ -179,7 +203,7 @@ export default function DashboardPage() {
       .subscribe();
 
     return () => { supabaseBrowserClient.removeChannel(channel); };
-  }, []);
+  }, [playNotificationSound]);
 
   // Normalize phone to E.164-like string to prevent UI duplicate routing (e.g. "+1 555" vs "+1555")
   const normalizePhone = (phone: string) => phone.replace(/[^0-9+]/g, '');
@@ -230,6 +254,15 @@ export default function DashboardPage() {
           </div>
           
           <div className="flex items-center gap-4">
+            <button 
+              onClick={() => handleForceSync(true)}
+              disabled={syncing}
+              className="p-2.5 bg-zinc-900 border border-zinc-700/80 rounded-full hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-white shadow-[0_0_15px_rgba(255,255,255,0.02)] disabled:opacity-50"
+              title="Force Database Sync"
+            >
+              <RefreshCw className={cn("w-5 h-5", syncing && "animate-spin text-indigo-400")} />
+            </button>
+
             <button 
               onClick={() => setShowSettingsModal(true)} 
               className="p-2.5 bg-zinc-900 border border-zinc-700/80 rounded-full hover:bg-zinc-800 transition-colors text-zinc-400 hover:text-white shadow-[0_0_15px_rgba(255,255,255,0.02)]"
