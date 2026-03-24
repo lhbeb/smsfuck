@@ -6,7 +6,7 @@ import { format } from "date-fns";
 import { MessageSquare, Phone, Clock, Search, Loader2, Inbox, ShieldCheck, UserPlus, Check, X, Bot, Hash, SignalHigh, Plus, Copy } from "lucide-react";
 import { supabaseBrowserClient } from "@/lib/supabase";
 import { Message } from "@/types";
-import { identifySender } from "@/lib/identify";
+import { identifySender, getCountryFlag } from "@/lib/identify";
 import { cn } from "@/lib/utils";
 
 export default function DashboardPage() {
@@ -128,12 +128,15 @@ export default function DashboardPage() {
     return () => { supabaseBrowserClient.removeChannel(channel); };
   }, []);
 
+  // Normalize phone to E.164-like string to prevent UI duplicate routing (e.g. "+1 555" vs "+1555")
+  const normalizePhone = (phone: string) => phone.replace(/[^0-9+]/g, '');
+
   const receiverNumbers = useMemo(() => {
-    return Array.from(new Set(messages.map((m) => m.to_number)));
+    return Array.from(new Set(messages.map((m) => normalizePhone(m.to_number))));
   }, [messages]);
 
   const filteredMessages = messages.filter((msg) => {
-      if (selectedInbox && msg.to_number !== selectedInbox) return false;
+      if (selectedInbox && normalizePhone(msg.to_number) !== selectedInbox) return false;
       const identity = identifySender(msg.from_number, msg.body);
       const customName = contacts[msg.from_number] || "";
       const search = searchQuery.toLowerCase();
@@ -146,7 +149,7 @@ export default function DashboardPage() {
 
   const getMessageCount = (phone: string | null) => {
     if (!phone) return messages.length;
-    return messages.filter(m => m.to_number === phone).length;
+    return messages.filter(m => normalizePhone(m.to_number) === phone).length;
   };
 
   return (
@@ -221,8 +224,8 @@ export default function DashboardPage() {
                   )}
                 >
                   <div className="flex items-center gap-2.5">
-                    <Hash className={cn("w-4 h-4 flex-shrink-0", selectedInbox === num ? "text-indigo-400/80" : "opacity-40")} />
-                    <span className="font-medium tracking-wide font-mono text-sm">{num}</span>
+                    <span className="text-sm shadow-sm">{getCountryFlag(num)}</span>
+                    <span className="font-medium tracking-wide font-mono text-sm shadow-[0_0_15px_rgba(255,255,255,0.02)]">{num}</span>
                     <div 
                       onClick={(e) => handleCopy(e, num)}
                       className="opacity-0 group-hover:opacity-100 p-1 hover:bg-white/10 rounded-md transition-all ml-1"
@@ -261,7 +264,7 @@ export default function DashboardPage() {
             <header className="flex flex-col md:flex-row items-center justify-between gap-6 pb-8 border-b border-zinc-800/60 relative z-10 w-full shrink-0">
               <div className="flex flex-col justify-center items-start w-full md:w-auto">
                 <h1 className="text-3xl font-bold tracking-tight text-white flex items-center gap-3">
-                  {selectedInbox ? selectedInbox : "System Feed"}
+                  {selectedInbox ? <div className="flex items-center gap-2"><span className="text-3xl">{getCountryFlag(selectedInbox)}</span><span>{selectedInbox}</span></div> : "System Feed"}
                 </h1>
                 <p className="text-sm text-zinc-500 mt-2 font-medium tracking-wide">
                   {selectedInbox 
@@ -348,6 +351,7 @@ export default function DashboardPage() {
                                 ) : (
                                   <div className="pr-2">
                                     <h3 className="text-lg font-bold text-zinc-100 flex items-center gap-2 truncate">
+                                      {!customContact && aiIdentity.type === 'unknown' && <span className="text-base">{getCountryFlag(msg.from_number)}</span>}
                                       {displayName}
                                     </h3>
                                     

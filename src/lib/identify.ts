@@ -50,3 +50,50 @@ export function identifySender(phone: string, body: string): { name: string, typ
 
   return { name: 'Unknown Sender', type: 'unknown' };
 }
+
+export function getCountryFlag(phone: string): string {
+  if (!phone) return "🌍";
+  const p = phone.replace(/[^0-9+]/g, '');
+  if (!p.startsWith("+")) return "🏢"; // Corporate / Shortcode
+  
+  // Specific match routing
+  if (p.startsWith("+212")) return "🇲🇦";
+  if (p.startsWith("+44")) return "🇬🇧";
+  if (p.startsWith("+33")) return "🇫🇷";
+  if (p.startsWith("+49")) return "🇩🇪";
+  if (p.startsWith("+34")) return "🇪🇸";
+  if (p.startsWith("+39")) return "🇮🇹";
+  if (p.startsWith("+61")) return "🇦🇺";
+  if (p.startsWith("+81")) return "🇯🇵";
+  if (p.startsWith("+55")) return "🇧🇷";
+  if (p.startsWith("+52")) return "🇲🇽";
+  if (p.startsWith("+91")) return "🇮🇳";
+  if (p.startsWith("+86")) return "🇨🇳";
+  if (p.startsWith("+31")) return "🇳🇱";
+  if (p.startsWith("+41")) return "🇨🇭";
+  if (p.startsWith("+46")) return "🇸🇪";
+  if (p.startsWith("+47")) return "🇳🇴";
+  if (p.startsWith("+351")) return "🇵🇹";
+  if (p.startsWith("+7")) return "🇷🇺";
+  if (p.startsWith("+20")) return "🇪🇬";
+  if (p.startsWith("+27")) return "🇿🇦";
+  if (p.startsWith("+971")) return "🇦🇪";
+  if (p.startsWith("+966")) return "🇸🇦";
+  if (p.startsWith("+90")) return "🇹🇷";
+  if (p.startsWith("+82")) return "🇰🇷"; // South Korea
+  if (p.startsWith("+65")) return "🇸🇬"; // Singapore
+  if (p.startsWith("+62")) return "🇮🇩"; // Indonesia
+  if (p.startsWith("+60")) return "🇲🇾"; // Malaysia
+  if (p.startsWith("+64")) return "🇳🇿"; // New Zealand
+  if (p.startsWith("+32")) return "🇧🇪"; // Belgium
+  if (p.startsWith("+43")) return "🇦🇹"; // Austria
+  if (p.startsWith("+30")) return "🇬🇷"; // Greece
+  if (p.startsWith("+63")) return "🇵🇭"; // Philippines
+  if (p.startsWith("+48")) return "🇵🇱"; // Poland
+  if (p.startsWith("+353")) return "🇮🇪"; // Ireland
+  if (p.startsWith("+45")) return "🇩🇰"; // Denmark
+  if (p.startsWith("+358")) return "🇫🇮"; // Finland
+  if (p.startsWith("+1")) return "🇺🇸"; // NA / US Standard (Waitlist specific overrides CA later if needed)
+
+  return "🌍";
+}
