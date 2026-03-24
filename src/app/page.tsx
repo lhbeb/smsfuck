@@ -156,9 +156,12 @@ export default function DashboardPage() {
     }
   }, []);
 
-  // Ultimate Auto-Healer: Silently polls Twilio every 30 seconds to guarantee ZERO missed messages.
+  // Ultimate Auto-Healer: Silently polls Twilio aggressively every 5 seconds to guarantee INSTANT message fetching without ngrok.
   useEffect(() => {
-    const interval = setInterval(() => handleForceSync(false), 30000);
+    // Fire immediately on mount so the user never has to wait!
+    handleForceSync(false);
+
+    const interval = setInterval(() => handleForceSync(false), 5000);
     return () => clearInterval(interval);
   }, [handleForceSync]);
 
@@ -215,9 +218,9 @@ export default function DashboardPage() {
       const search = searchQuery.toLowerCase();
       
       return msg.from_number.includes(search) || 
-             msg.body.toLowerCase().includes(search) ||
-             identity.name.toLowerCase().includes(search) ||
-             customName.toLowerCase().includes(search);
+             (msg.body || "").toLowerCase().includes(search) ||
+             (identity.name || "").toLowerCase().includes(search) ||
+             (customName || "").toLowerCase().includes(search);
   });
 
   const getMessageCount = (phone: string | null) => {
@@ -501,7 +504,7 @@ export default function DashboardPage() {
                           <div className="flex-grow xl:border-l border-zinc-800/40 xl:pl-8 flex flex-col justify-start w-full">
                             <div className="bg-[#050505]/40 rounded-2xl p-5 border border-zinc-800/80 shadow-[inset_0_2px_15px_rgba(0,0,0,0.15)] relative">
                               <p className="text-zinc-300 leading-relaxed break-words whitespace-pre-wrap text-[15px] md:text-[16px]">
-                                {msg.body}
+                                {msg.body || <span className="text-zinc-500 italic">No text content provided.</span>}
                               </p>
                             </div>
                             
