@@ -154,18 +154,21 @@ export default function DashboardPage() {
       {/* Background ambient lighting */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1200px] h-[500px] bg-indigo-500/10 blur-[150px] rounded-[100%] pointer-events-none opacity-50" />
       
-      <div className="max-w-7xl mx-auto px-6 py-12 md:py-16 relative z-10 space-y-12">
+      <div className="max-w-7xl mx-auto px-6 py-8 md:py-12 relative z-10 space-y-8">
         
-        {/* CENTERED HEADER */}
-        <header className="flex flex-col items-center text-center space-y-8">
-          <Image 
-            src="/logo.png" 
-            alt="Application Logo" 
-            width={180} 
-            height={180} 
-            className="drop-shadow-[0_0_35px_rgba(99,102,241,0.6)] hover:scale-105 transition-transform duration-500 priority"
-          />
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-zinc-900/80 border border-zinc-700/80 text-sm font-medium backdrop-blur-md shadow-[0_0_30px_rgba(16,185,129,0.15)]">
+        {/* TOP NAVBAR */}
+        <header className="flex flex-row items-center justify-between w-full">
+          <div className="flex items-center">
+            <Image 
+              src="/logo.png" 
+              alt="Application Logo" 
+              width={160} 
+              height={160} 
+              className="drop-shadow-[0_0_35px_rgba(99,102,241,0.6)] hover:scale-105 transition-transform duration-500 priority"
+            />
+          </div>
+          
+          <div className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-900/80 border border-zinc-700/80 text-sm font-medium backdrop-blur-md shadow-[0_0_30px_rgba(16,185,129,0.15)]">
             <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-[pulse_2s_ease-in-out_infinite] shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
             <span className="text-zinc-200 tracking-wide uppercase text-xs">Environment Active</span>
             <div className="w-[1px] h-4 bg-zinc-700 mx-1" />
@@ -414,6 +417,11 @@ export default function DashboardPage() {
 
         </div>
       </div>
+
+      {/* FOOTER */}
+      <footer className="w-full pb-8 flex items-center justify-center text-zinc-600 text-sm tracking-wide relative z-10 transition-colors hover:text-zinc-500">
+        Made with <span className="text-red-500/80 mx-1.5 animate-[pulse_2s_ease-in-out_infinite]">❤️</span> by <a href="https://github.com/lhbeb" target="_blank" rel="noopener noreferrer" className="font-bold text-zinc-400 hover:text-indigo-400 transition-colors ml-1">Mehdi (l3alawi)</a>
+      </footer>
 
       {/* Add Number Modal */}
       {showAddModal && (
