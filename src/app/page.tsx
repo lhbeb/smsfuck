@@ -138,7 +138,12 @@ export default function DashboardPage() {
     if (manual) setSyncing(true);
     try {
       // 1. Force backend to rigorously ingest directly from Twilio
-      await fetch("/api/twilio/fetch-history");
+      const syncRes = await fetch("/api/twilio/fetch-history");
+      const syncData = await syncRes.json();
+      
+      if (syncData.errors && syncData.errors.length > 0 && manual) {
+         alert("Sync encountered issues:\n\n" + syncData.errors.join("\n"));
+      }
       
       // 2. Real-time update the client store without refreshing the page
       const res = await fetch("/api/messages", { cache: "no-store" });

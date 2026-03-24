@@ -39,13 +39,16 @@ export async function GET() {
 
         if (messages.length === 0) continue;
 
-        // Map Twilio message objects to our Supabase schema
+        // Map Twilio message objects to our Supabase schema with aggressive type safety
         const mappedMessages = messages.map((m) => ({
           from_number: m.from,
           to_number: m.to,
           body: m.body,
           message_sid: m.sid,
-          created_at: m.dateCreated.toISOString(),
+          // Safely parse date regardless of Twilio SDK string/Date behavior
+          created_at: m.dateCreated instanceof Date 
+            ? m.dateCreated.toISOString() 
+            : new Date(m.dateCreated || Date.now()).toISOString(),
         }));
 
         // Upsert into Supabase
@@ -55,6 +58,7 @@ export async function GET() {
 
         if (error) {
           console.error(`Supabase bulk insert error for ${acc.phone_number}:`, error);
+          syncErrors.push(`[${acc.phone_number}]: DB Insert Failed - ${error.message}`);
         } else {
           totalImported += mappedMessages.length;
         }
