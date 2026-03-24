@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { MessageSquare, Phone, Clock, Search, Loader2, Inbox, ShieldCheck, UserPlus, Check, X, Bot, Hash, SignalHigh, Plus, Copy, Settings, Trash2, ArchiveRestore, RefreshCw } from "lucide-react";
+import { MessageSquare, Phone, Clock, Search, Loader2, Inbox, ShieldCheck, UserPlus, Check, X, Bot, Hash, SignalHigh, Plus, Copy, Settings, Trash2, ArchiveRestore, RefreshCw, LogOut } from "lucide-react";
 import { supabaseBrowserClient } from "@/lib/supabase";
 import { Message } from "@/types";
 import { identifySender, getCountryFlag } from "@/lib/identify";
@@ -19,10 +19,6 @@ export default function DashboardPage() {
   const [contacts, setContacts] = useState<Record<string, string>>({});
   const [editingContactId, setEditingContactId] = useState<string | null>(null);
   const [newContactName, setNewContactName] = useState("");
-
-  const [showAddModal, setShowAddModal] = useState(false);
-  const [newTwilioNumber, setNewTwilioNumber] = useState("");
-  const [addingNumber, setAddingNumber] = useState(false);
   const [copiedNumber, setCopiedNumber] = useState<string | null>(null);
 
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -50,29 +46,6 @@ export default function DashboardPage() {
     localStorage.setItem("sms_contacts", JSON.stringify(updated));
     setEditingContactId(null);
     setNewContactName("");
-  };
-
-  const handleAddNumber = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newTwilioNumber.trim()) return;
-    setAddingNumber(true);
-    try {
-      const formatted = newTwilioNumber.startsWith("+") ? newTwilioNumber : `+1${newTwilioNumber.replace(/\D/g, "")}`;
-      const res = await fetch("/api/twilio/add-listener", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ phone_number: formatted })
-      });
-      if (!res.ok) throw new Error("Failed");
-      setNewTwilioNumber("");
-      setShowAddModal(false);
-      setSelectedInbox(formatted);
-    } catch (err) {
-      console.error(err);
-      alert("Failed to register endpoint.");
-    } finally {
-      setAddingNumber(false);
-    }
   };
 
   const handleSaveSettings = async (e: React.FormEvent) => {
@@ -103,6 +76,10 @@ export default function DashboardPage() {
 
   const handleDeleteMessage = async (message_sid: string, restore = false) => {
     setLoadingAction(message_sid);
+
+    // 1. Optimistic UI update instantly flags the message as trashed before the server responds
+    setMessages(prev => prev.map(m => m.message_sid === message_sid ? { ...m, is_deleted: restore !== true } : m));
+
     try {
       const res = await fetch("/api/messages/delete", {
         method: "POST",
@@ -110,9 +87,10 @@ export default function DashboardPage() {
         body: JSON.stringify({ message_sid, restore })
       });
       if (!res.ok) throw new Error("Failed to modify message");
-      // Supabase realtime instantly updates the UI from the listener
     } catch (err) {
       console.error(err);
+      // Revert optimistic attempt on failure
+      setMessages(prev => prev.map(m => m.message_sid === message_sid ? { ...m, is_deleted: restore } : m));
       alert("Failed to modify message.");
     } finally {
       setLoadingAction(null);
@@ -149,6 +127,11 @@ export default function DashboardPage() {
     } catch (e) {
       console.log("Audio play failed.");
     }
+  };
+
+  const handleLogout = () => {
+    document.cookie = "auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    window.location.href = "/login";
   };
 
   const handleForceSync = useCallback(async (manual = true) => {
@@ -199,6 +182,9 @@ export default function DashboardPage() {
       .on("postgres_changes", { event: "INSERT", schema: "public", table: "messages" }, (payload) => {
           setMessages((prev) => [payload.new as Message, ...prev]);
           playNotificationSound();
+      })
+      .on("postgres_changes", { event: "UPDATE", schema: "public", table: "messages" }, (payload) => {
+          setMessages((prev) => prev.map(m => m.id === payload.new.id ? payload.new as Message : m));
       })
       .subscribe();
 
@@ -270,7 +256,18 @@ export default function DashboardPage() {
             >
               <Settings className="w-5 h-5" />
             </button>
-            <div className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-900/80 border border-zinc-700/80 text-sm font-medium backdrop-blur-md shadow-[0_0_30px_rgba(16,185,129,0.15)]">
+            
+            <div className="w-px h-6 bg-zinc-800 hidden sm:block mx-1" />
+            
+            <button 
+              onClick={handleLogout} 
+              className="p-2.5 bg-zinc-900 border border-red-900/30 rounded-full hover:bg-red-500/10 transition-colors text-zinc-500 hover:text-red-400"
+              title="Logout"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+
+            <div className="hidden sm:inline-flex items-center gap-2 px-4 py-2 rounded-full bg-zinc-900/80 border border-zinc-700/80 text-sm font-medium backdrop-blur-md shadow-[0_0_30px_rgba(16,185,129,0.15)] ml-2">
               <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-[pulse_2s_ease-in-out_infinite] shadow-[0_0_10px_rgba(16,185,129,0.8)]" />
               <span className="text-zinc-200 tracking-wide uppercase text-xs">Environment Active</span>
               <div className="w-[1px] h-4 bg-zinc-700 mx-1" />
@@ -358,17 +355,6 @@ export default function DashboardPage() {
                   </span>
                 </button>
               ))}
-
-              {/* Add Number Button */}
-              <div className="pt-4">
-                <button 
-                  onClick={() => setShowAddModal(true)}
-                  className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-2xl border border-dashed border-zinc-700/50 hover:border-indigo-500/50 hover:bg-indigo-500/10 text-zinc-500 hover:text-indigo-400 transition-all font-medium text-sm outline-none"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Virtual Number</span>
-                </button>
-              </div>
             </div>
           </div>
 
@@ -558,45 +544,6 @@ export default function DashboardPage() {
       <footer className="w-full pb-8 flex items-center justify-center text-zinc-600 text-sm tracking-wide relative z-10 transition-colors hover:text-zinc-500">
         Made with <span className="text-red-500/80 mx-1.5 animate-[pulse_2s_ease-in-out_infinite]">❤️</span> by <a href="https://github.com/lhbeb" target="_blank" rel="noopener noreferrer" className="font-bold text-zinc-400 hover:text-indigo-400 transition-colors ml-1">Mehdi (l3alawi)</a>
       </footer>
-
-      {/* Add Number Modal */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-zinc-950 border border-zinc-800 p-8 rounded-3xl w-full max-w-sm shadow-2xl scale-100">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-bold text-white tracking-tight">Add Virtual Endpoint</h3>
-              <button onClick={() => setShowAddModal(false)} className="text-zinc-500 hover:text-white transition-colors">
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <p className="text-sm text-zinc-400 mb-8 leading-relaxed">
-              Enter a Twilio phone number your application is receiving messages on. We will open an active listener for it.
-            </p>
-            
-            <form onSubmit={handleAddNumber} className="space-y-6">
-              <div>
-                <input 
-                  autoFocus
-                  type="tel" 
-                  placeholder="+1 (555) 000-0000"
-                  value={newTwilioNumber}
-                  onChange={(e) => setNewTwilioNumber(e.target.value)}
-                  className="w-full bg-black border border-zinc-800 rounded-2xl px-5 py-4 text-white focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500/50 font-mono text-sm shadow-inner transition-all"
-                />
-              </div>
-              
-              <button 
-                disabled={addingNumber || !newTwilioNumber.trim()}
-                type="submit"
-                className="w-full bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold py-4 rounded-2xl transition-colors flex items-center justify-center gap-2 shadow-[0_0_20px_rgba(79,70,229,0.3)] hover:shadow-[0_0_30px_rgba(79,70,229,0.5)]"
-              >
-                {addingNumber ? <Loader2 className="w-5 h-5 animate-spin" /> : "Deploy Listener"}
-              </button>
-            </form>
-          </div>
-        </div>
-      )}
 
       {/* Settings Modal */}
       {showSettingsModal && (

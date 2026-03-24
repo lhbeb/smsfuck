@@ -8,7 +8,7 @@ export const metadata: Metadata = {
   title: "SMS Dashboard",
   description: "Real-time Twilio SMS dashboard built with Next.js and Supabase",
   icons: {
-    icon: "/logo.png",
+    icon: "/favicon.png",
   },
   robots: {
     index: false,
