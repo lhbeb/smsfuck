@@ -324,7 +324,7 @@ export default function DashboardPage() {
               </button>
 
               <div className="pt-4 pb-2 px-4 text-[10px] font-bold tracking-widest text-zinc-600 uppercase flex items-center gap-2">
-                Active Endpoints
+                Active Numbers
                 <div className="flex-1 h-px bg-zinc-800/50" />
               </div>
               
