@@ -30,11 +30,28 @@ export default function DashboardPage() {
   const [viewingDeleted, setViewingDeleted] = useState(false);
   const [loadingAction, setLoadingAction] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const [registeredNumbers, setRegisteredNumbers] = useState<string[]>([]);
 
   useEffect(() => {
     const saved = localStorage.getItem("sms_contacts");
     if (saved) setContacts(JSON.parse(saved));
   }, []);
+
+  const fetchRegisteredNumbers = useCallback(async () => {
+    try {
+      const res = await fetch("/api/twilio/accounts/list", { cache: "no-store" });
+      const data = await res.json();
+      if (Array.isArray(data)) {
+        setRegisteredNumbers(data.map((r: { phone_number: string }) => r.phone_number.replace(/[^0-9+]/g, '')));
+      }
+    } catch (e) {
+      console.error("Failed to fetch registered numbers", e);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchRegisteredNumbers();
+  }, [fetchRegisteredNumbers]);
 
   const saveContact = (phone: string) => {
     if (!newContactName.trim()) {
@@ -66,6 +83,8 @@ export default function DashboardPage() {
       setSettingPhone("");
       setSettingSid("");
       setSettingToken("");
+      // Immediately refresh the registered numbers list so the new number appears in the sidebar
+      await fetchRegisteredNumbers();
     } catch (err) {
       console.error(err);
       alert("Failed to save credentials.");
@@ -203,8 +222,10 @@ export default function DashboardPage() {
   const normalizePhone = (phone: string) => phone.replace(/[^0-9+]/g, '');
 
   const receiverNumbers = useMemo(() => {
-    return Array.from(new Set(messages.filter((m) => !m.is_deleted).map((m) => normalizePhone(m.to_number))));
-  }, [messages]);
+    const fromMessages = messages.filter((m) => !m.is_deleted).map((m) => normalizePhone(m.to_number));
+    // Merge vault-registered numbers so they always appear even with zero messages
+    return Array.from(new Set([...registeredNumbers, ...fromMessages]));
+  }, [messages, registeredNumbers]);
 
   const filteredMessages = messages.filter((msg) => {
       // Isolate Trash
