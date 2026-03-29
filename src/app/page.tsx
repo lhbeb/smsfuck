@@ -3,7 +3,7 @@
 import { useEffect, useState, useMemo, useCallback } from "react";
 import Image from "next/image";
 import { format } from "date-fns";
-import { MessageSquare, Phone, Clock, Search, Loader2, Inbox, ShieldCheck, UserPlus, Check, X, Bot, Hash, SignalHigh, Plus, Copy, Settings, Trash2, ArchiveRestore, RefreshCw, LogOut } from "lucide-react";
+import { MessageSquare, Phone, Clock, Search, Loader2, Inbox, ShieldCheck, UserPlus, Check, X, Bot, SignalHigh, Copy, Settings, Trash2, ArchiveRestore, RefreshCw, LogOut } from "lucide-react";
 import { supabaseBrowserClient } from "@/lib/supabase";
 import { Message } from "@/types";
 import { identifySender, getCountryFlag } from "@/lib/identify";
@@ -123,11 +123,13 @@ export default function DashboardPage() {
     setTimeout(() => setCopiedNumber(null), 2000);
   };
 
-  const playNotificationSound = () => {
+  const playNotificationSound = useCallback(() => {
     try {
-      const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-      if (!AudioContext) return;
-      const ctx = new AudioContext();
+      type AudioCtxCtor = typeof AudioContext;
+      const AudioCtx: AudioCtxCtor | undefined =
+        window.AudioContext ?? (window as Window & { webkitAudioContext?: AudioCtxCtor }).webkitAudioContext;
+      if (!AudioCtx) return;
+      const ctx = new AudioCtx();
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       
@@ -143,13 +145,13 @@ export default function DashboardPage() {
       gain.connect(ctx.destination);
       osc.start();
       osc.stop(ctx.currentTime + 0.5);
-    } catch (e) {
+    } catch {
       console.log("Audio play failed.");
     }
-  };
+  }, []);
 
   const handleLogout = () => {
-    document.cookie = "auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/;";
+    document.cookie = "auth=; expires=Thu, 01 Jan 1970 00:00:00 UTC; path=/; SameSite=Lax";
     window.location.href = "/login";
   };
 
@@ -192,8 +194,8 @@ export default function DashboardPage() {
         const data = await res.json();
         if (data.error) throw new Error(data.error);
         setMessages(data);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : "Failed to load messages");
       } finally {
         setLoading(false);
       }

@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { supabaseServerClient } from "@/lib/supabase";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 export const revalidate = 0;
 export const fetchCache = "force-no-store";
 
 export async function GET() {
+  const unauth = requireAuth();
+  if (unauth) return unauth;
+
   try {
     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes("placeholder")) {
       return NextResponse.json(

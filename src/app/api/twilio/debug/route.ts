@@ -1,11 +1,16 @@
 import { NextResponse } from "next/server";
 import twilio from "twilio";
 import { supabaseServerClient } from "@/lib/supabase";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const unauth = requireAuth();
+  if (unauth) return unauth;
+
   const results: Record<string, unknown>[] = [];
+
 
   try {
     const { data: accounts, error: accountsErr } = await supabaseServerClient
@@ -58,19 +63,23 @@ export async function GET() {
         entry.messages_from_this_number = fromMessages.length;
 
         entry.status = "OK";
-      } catch (err: any) {
+      } catch (err: unknown) {
         entry.status = "ERROR";
-        entry.error_code = err.code;
-        entry.error_message = err.message;
-        entry.error_status = err.status;
-        entry.error_detail = err.moreInfo;
+        if (err instanceof Error) {
+          entry.error_message = err.message;
+        }
+        const twilioErr = err as Record<string, unknown>;
+        entry.error_code = twilioErr.code;
+        entry.error_status = twilioErr.status;
+        entry.error_detail = twilioErr.moreInfo;
       }
 
       results.push(entry);
     }
 
     return NextResponse.json({ results }, { status: 200 });
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Internal Server Error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

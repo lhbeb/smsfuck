@@ -19,8 +19,8 @@ export default function LoginPage() {
     await new Promise((resolve) => setTimeout(resolve, 800));
 
     if (email === "elmahboubimehdi@gmail.com" && password === "Localserver!!2") {
-      // Set secure auth cookie
-      document.cookie = "auth=secured; path=/; max-age=86400;"; // 24 hours expiry
+      // Set secure auth cookie — 30 day session
+      document.cookie = "auth=secured; path=/; max-age=2592000; SameSite=Lax";
       // Force hard redirect so middleware re-evaluates
       window.location.href = "/";
     } else {

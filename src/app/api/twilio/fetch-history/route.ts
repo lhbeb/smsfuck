@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import twilio from "twilio";
 import { supabaseServerClient } from "@/lib/supabase";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const unauth = requireAuth();
+  if (unauth) return unauth;
+
   try {
     // 1. Fetch all securely stored accounts from the Vault
     const { data: accounts, error: accountsErr } = await supabaseServerClient
@@ -63,9 +67,10 @@ export async function GET() {
           totalImported += mappedMessages.length;
         }
 
-      } catch (clientErr: any) {
+      } catch (clientErr: unknown) {
         console.error(`Failed to sync history for ${acc.phone_number}:`, clientErr);
-        syncErrors.push(`[${acc.phone_number}]: ${clientErr.message}`);
+        const msg = clientErr instanceof Error ? clientErr.message : "Unknown error";
+        syncErrors.push(`[${acc.phone_number}]: ${msg}`);
       }
     }
 
@@ -76,8 +81,9 @@ export async function GET() {
       message: "Successfully synchronized past messages for all endpoints in the Security Vault!"
     });
 
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Error fetching history:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Internal Server Error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }

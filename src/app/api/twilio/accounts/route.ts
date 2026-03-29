@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabaseServerClient } from "@/lib/supabase";
+import { requireAuth } from "@/lib/auth";
 
 export async function POST(request: Request) {
+  const unauth = requireAuth();
+  if (unauth) return unauth;
+
   try {
     const { phone_number, account_sid, auth_token } = await request.json();
 
@@ -32,7 +36,7 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true, message: "Credentials locked in vault." });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("API error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }

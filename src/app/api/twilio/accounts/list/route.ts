@@ -1,9 +1,13 @@
 import { NextResponse } from "next/server";
 import { supabaseServerClient } from "@/lib/supabase";
+import { requireAuth } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const unauth = requireAuth();
+  if (unauth) return unauth;
+
   try {
     const { data, error } = await supabaseServerClient
       .from("twilio_accounts")
@@ -16,7 +20,7 @@ export async function GET() {
     }
 
     return NextResponse.json(data ?? []);
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("API error:", error);
     return NextResponse.json({ error: "Internal Server Error" }, { status: 500 });
   }

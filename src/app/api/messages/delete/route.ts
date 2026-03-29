@@ -1,7 +1,11 @@
 import { NextResponse } from "next/server";
 import { supabaseServerClient } from "@/lib/supabase";
+import { requireAuth } from "@/lib/auth";
 
 export async function POST(request: Request) {
+  const unauth = requireAuth();
+  if (unauth) return unauth;
+
   try {
     const { message_sid, restore } = await request.json();
 
@@ -21,8 +25,9 @@ export async function POST(request: Request) {
     }
 
     return NextResponse.json({ success: true });
-  } catch (error: any) {
+  } catch (error: unknown) {
     console.error("Delete error:", error);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    const message = error instanceof Error ? error.message : "Unknown error";
+    return NextResponse.json({ error: message }, { status: 500 });
   }
 }
