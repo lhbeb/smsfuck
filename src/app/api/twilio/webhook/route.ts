@@ -2,6 +2,15 @@ import { NextRequest } from "next/server";
 import twilio from "twilio";
 import { supabaseServerClient } from "@/lib/supabase";
 
+const AUTO_RESPONDER_NUMBER = "+13186574299";
+const AUTO_RESPONDER_MESSAGE =
+  "Thanks for your message. We received it and will get back to you shortly.";
+
+function normalizePhoneNumber(phone: string) {
+  const digits = phone.replace(/\D/g, "");
+  return phone.trim().startsWith("+") ? `+${digits}` : `+1${digits}`;
+}
+
 export async function POST(request: NextRequest) {
   try {
     const formData = await request.formData();
@@ -20,7 +29,7 @@ export async function POST(request: NextRequest) {
     let twilioAuthToken = process.env.TWILIO_AUTH_TOKEN;
 
     if (toNumber) {
-      const formattedTo = toNumber.startsWith("+") ? toNumber : `+1${toNumber.replace(/\D/g, "")}`;
+      const formattedTo = normalizePhoneNumber(toNumber);
       const { data: account } = await supabaseServerClient
         .from("twilio_accounts")
         .select("auth_token")
@@ -74,8 +83,11 @@ export async function POST(request: NextRequest) {
       return new Response("Database error", { status: 500 });
     }
 
-    // Return empty TwiML response
     const twiml = new twilio.twiml.MessagingResponse();
+
+    if (normalizePhoneNumber(toNumber) === AUTO_RESPONDER_NUMBER) {
+      twiml.message(AUTO_RESPONDER_MESSAGE);
+    }
     
     return new Response(twiml.toString(), {
       status: 200,

@@ -47,7 +47,7 @@ export async function GET() {
         const mappedMessages = messages.map((m) => ({
           from_number: m.from,
           to_number: m.to,
-          body: m.body,
+          body: m.body || '',
           message_sid: m.sid,
           // Safely parse date regardless of Twilio SDK string/Date behavior
           created_at: m.dateCreated instanceof Date 

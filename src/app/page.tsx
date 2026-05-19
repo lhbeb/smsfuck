@@ -164,6 +164,10 @@ export default function DashboardPage() {
       
       if (syncData.errors && syncData.errors.length > 0 && manual) {
          alert("Sync encountered issues:\n\n" + syncData.errors.join("\n"));
+      } else if (syncData.error && manual) {
+         alert("Sync error:\n\n" + syncData.error);
+      } else if (syncData.message && manual && syncRes.status === 404) {
+         alert("Notice: " + syncData.message);
       }
       
       // 2. Real-time update the client store without refreshing the page
@@ -221,7 +225,10 @@ export default function DashboardPage() {
   }, [playNotificationSound]);
 
   // Normalize phone to E.164-like string to prevent UI duplicate routing (e.g. "+1 555" vs "+1555")
-  const normalizePhone = (phone: string) => phone.replace(/[^0-9+]/g, '');
+  const normalizePhone = (phone: string | undefined | null) => {
+    if (!phone) return '';
+    return phone.replace(/[^0-9+]/g, '');
+  };
 
   const receiverNumbers = useMemo(() => {
     const fromMessages = messages.filter((m) => !m.is_deleted).map((m) => normalizePhone(m.to_number));
